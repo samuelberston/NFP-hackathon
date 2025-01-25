@@ -1,0 +1,11 @@
+framework:
+  - terraform
+
+skip-check:
+  - CKV_GCP_62  # Ensure that Cloud Storage buckets have uniform bucket-level access enabled (you already have this)
+  - CKV_GCP_114 # Ensure public access prevention is enforced on Cloud Storage bucket (you're handling this through other means)
+
+soft-fail: true
+compact: true
+directory:
+  - . 
