@@ -1,12 +1,12 @@
 from langchain.agents import Tool, AgentExecutor, create_react_agent
 from langchain.prompts import PromptTemplate
-from langchain_core.language_models import BaseLangModel
+from langchain_core.language_models.base import BaseLanguageModel
 from typing import List, Dict
 import json
 from project_context import TerraformProjectContext
 
 class CheckovReportAgent:
-    def __init__(self, llm: BaseLangModel, project_path: str):
+    def __init__(self, llm: BaseLanguageModel, project_path: str):
         self.llm = llm
         self.project_context = TerraformProjectContext(project_path)
         self.project_context.analyze_project()
@@ -35,7 +35,10 @@ class CheckovReportAgent:
         prompt = PromptTemplate.from_template(
             """You are a security analysis assistant that helps process Checkov scan results.
             
-            Given the following failed check and project context, analyze the issue and provide remediation steps:
+            Project Context:
+            {project_context}
+            
+            Given the following failed check, analyze the issue and provide remediation steps:
             {input}
             
             Consider:
@@ -45,12 +48,20 @@ class CheckovReportAgent:
             4. How does this impact the overall project architecture?
             
             Available tools: {tools}
+            Tool names: {tool_names}
+            
+            To analyze the issue, you should:
+            1. Use the analyze_failed_check tool to get detailed information about the check
+            2. Use the get_project_context tool to understand the infrastructure context
+            3. Provide your analysis based on the information gathered
+            
+            {agent_scratchpad}
             
             Response should be clear and actionable.
             """
         )
         
-        # Create agent
+        # Create the agent
         self.agent = create_react_agent(
             llm=self.llm,
             tools=self.tools,
@@ -60,7 +71,8 @@ class CheckovReportAgent:
         self.agent_executor = AgentExecutor(
             agent=self.agent,
             tools=self.tools,
-            verbose=True
+            verbose=True,
+            handle_parsing_errors=True
         )
 
     def _get_project_context(self) -> str:
@@ -124,14 +136,13 @@ class CheckovReportAgent:
         
         failed_checks = report_data.get("results", {}).get("failed_checks", [])
         
-        # Add project context to each check
-        for check in failed_checks:
-            check["project_context"] = self._get_project_context()
-        
-        # Process each failed check
+        # Process each failed check with project context in prompt
         results = []
         for check in failed_checks:
-            result = self.agent_executor.invoke({"input": check})
+            result = self.agent_executor.invoke({
+                "input": check,
+                "project_context": self._get_project_context()
+            })
             results.append(result)
             
         # Get overall summary

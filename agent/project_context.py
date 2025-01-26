@@ -29,10 +29,6 @@ class TerraformProjectContext:
                 content = hcl2.load(f)
                 self.tf_files[file_path] = content
                 
-                print(f"\nDEBUG: Parsing file: {file_path}")
-                print(f"DEBUG: Raw content type: {type(content)}")
-                print(f"DEBUG: Raw content: {content}")
-                
                 # Handle provider blocks
                 if 'provider' in content:
                     provider_blocks = content['provider']
@@ -76,8 +72,6 @@ class TerraformProjectContext:
 
     def _analyze_network_components(self, resource_type: str, resource_name: str, resource_config: dict) -> None:
         """Analyze and extract network topology from Terraform content."""
-        print(f"\nDEBUG: Analyzing network component: {resource_type}.{resource_name}")
-        
         network_resources = {
             'google_compute_network': 'vpc',
             'google_compute_subnetwork': 'subnet',
@@ -91,12 +85,10 @@ class TerraformProjectContext:
         }
 
         if resource_type in network_resources:
-            print(f"DEBUG: Found network resource type: {resource_type}")
             component_type = network_resources[resource_type]
             if component_type not in self.network_topology:
                 self.network_topology[component_type] = {}
             
-            print(f"DEBUG: Adding to topology: {component_type}.{resource_name}")
             self.network_topology[component_type][resource_name] = resource_config
 
     def get_project_summary(self) -> dict:
@@ -123,34 +115,15 @@ class TerraformProjectContext:
             json.dump(context, f, indent=2)
 
 if __name__ == "__main__":
-    # Add debug print for raw content
+    # Initialize with your project path
     context = TerraformProjectContext("../gcp/")
-    
-    # Debug print for a specific file
-    with open("../gcp/network.tf", 'r') as f:
-        content = hcl2.load(f)
-        print("\nRaw content from network.tf:")
-        print(content)
-    
     context.analyze_project()
-    summary = context.get_project_summary()
-    print("\nProject Summary:")
-    print("---------------")
-    print(f"Providers: {summary['providers']}")
-    print(f"\nResource Types: {summary['resource_types']}")
-    print(f"\nResource Counts: {summary['resource_count']}")
-    print(f"\nNetwork Components: {summary['network_components']}")
-    print(f"\nFiles Analyzed: {summary['files_analyzed']}")
     
-    # Debug output
-    print("\nDetailed Resources:")
-    for resource_type, resources in context.resources.items():
-        print(f"\n{resource_type}:")
-        for resource in resources:
-            print(f"  - {resource}")
-            
-    print("\nNetwork Topology:")
-    for component_type, components in context.network_topology.items():
-        print(f"\n{component_type}:")
-        for name in components:
-            print(f"  - {name}")
+    # Get and print the project context
+    print("\nProject Context:")
+    print("---------------")
+    context.export_context("project_context.json")
+    
+    # Read and print the JSON file
+    with open("project_context.json", "r") as f:
+        print(json.dumps(json.load(f), indent=2))

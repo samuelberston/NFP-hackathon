@@ -1,0 +1,376 @@
+{
+  "project_path": "../gcp/",
+  "providers": [
+    "google"
+  ],
+  "resources": {
+    "google_compute_instance": [
+      "public",
+      "private",
+      "vm_instance"
+    ],
+    "google_compute_network": [
+      "vpc_network",
+      "vpc"
+    ],
+    "google_compute_firewall": [
+      "allow_http",
+      "allow_public_web",
+      "allow_internal"
+    ],
+    "google_compute_subnetwork": [
+      "public",
+      "private"
+    ],
+    "google_compute_router": [
+      "router"
+    ],
+    "google_compute_router_nat": [
+      "nat"
+    ],
+    "google_storage_bucket": [
+      "data"
+    ],
+    "google_kms_key_ring": [
+      "bucket_keyring"
+    ],
+    "google_kms_crypto_key": [
+      "bucket_key"
+    ],
+    "google_kms_crypto_key_iam_member": [
+      "crypto_key"
+    ]
+  },
+  "network_topology": {
+    "instance": {
+      "public": {
+        "name": "terraform-${var.environment}-public",
+        "machine_type": "e2-micro",
+        "zone": "${var.region}-a",
+        "boot_disk": [
+          {
+            "initialize_params": [
+              {
+                "image": "debian-cloud/debian-11"
+              }
+            ]
+          }
+        ],
+        "network_interface": [
+          {
+            "subnetwork": "${google_compute_subnetwork.public.id}",
+            "access_config": [
+              {}
+            ]
+          }
+        ],
+        "tags": [
+          "public",
+          "web"
+        ],
+        "metadata": {
+          "environment": "${var.environment}"
+        }
+      },
+      "private": {
+        "name": "terraform-${var.environment}-private",
+        "machine_type": "e2-micro",
+        "zone": "${var.region}-a",
+        "boot_disk": [
+          {
+            "initialize_params": [
+              {
+                "image": "debian-cloud/debian-11"
+              }
+            ]
+          }
+        ],
+        "network_interface": [
+          {
+            "subnetwork": "${google_compute_subnetwork.private.id}"
+          }
+        ],
+        "tags": [
+          "private"
+        ],
+        "metadata": {
+          "environment": "${var.environment}"
+        }
+      },
+      "vm_instance": {
+        "name": "terraform-instance",
+        "machine_type": "e2-micro",
+        "boot_disk": [
+          {
+            "initialize_params": [
+              {
+                "image": "debian-cloud/debian-11"
+              }
+            ]
+          }
+        ],
+        "network_interface": [
+          {
+            "network": "${google_compute_network.vpc_network.name}",
+            "access_config": [
+              {}
+            ]
+          }
+        ],
+        "tags": [
+          "web",
+          "dev"
+        ],
+        "metadata": {
+          "environment": "development"
+        }
+      }
+    },
+    "vpc": {
+      "vpc_network": {
+        "name": "terraform-network",
+        "auto_create_subnetworks": "true"
+      },
+      "vpc": {
+        "name": "terraform-${var.environment}-vpc",
+        "auto_create_subnetworks": false
+      }
+    },
+    "firewall": {
+      "allow_http": {
+        "name": "allow-http",
+        "network": "${google_compute_network.vpc_network.name}",
+        "allow": [
+          {
+            "protocol": "tcp",
+            "ports": [
+              "80"
+            ]
+          }
+        ],
+        "source_ranges": [
+          "0.0.0.0/0"
+        ],
+        "target_tags": [
+          "web"
+        ]
+      },
+      "allow_public_web": {
+        "name": "allow-public-web",
+        "network": "${google_compute_network.vpc.name}",
+        "allow": [
+          {
+            "protocol": "tcp",
+            "ports": [
+              "80",
+              "443"
+            ]
+          }
+        ],
+        "source_ranges": [
+          "0.0.0.0/0"
+        ],
+        "target_tags": [
+          "web"
+        ]
+      },
+      "allow_internal": {
+        "name": "allow-internal",
+        "network": "${google_compute_network.vpc.name}",
+        "allow": [
+          {
+            "protocol": "tcp",
+            "ports": [
+              "0-65535"
+            ]
+          },
+          {
+            "protocol": "udp",
+            "ports": [
+              "0-65535"
+            ]
+          },
+          {
+            "protocol": "icmp"
+          }
+        ],
+        "source_ranges": [
+          "${google_compute_subnetwork.public.ip_cidr_range}",
+          "${google_compute_subnetwork.private.ip_cidr_range}"
+        ]
+      }
+    },
+    "subnet": {
+      "public": {
+        "name": "terraform-${var.environment}-public",
+        "ip_cidr_range": "10.0.1.0/24",
+        "network": "${google_compute_network.vpc.id}",
+        "region": "${var.region}",
+        "log_config": [
+          {
+            "aggregation_interval": "INTERVAL_5_SEC",
+            "flow_sampling": 0.5,
+            "metadata": "INCLUDE_ALL_METADATA"
+          }
+        ]
+      },
+      "private": {
+        "name": "terraform-${var.environment}-private",
+        "ip_cidr_range": "10.0.2.0/24",
+        "network": "${google_compute_network.vpc.id}",
+        "region": "${var.region}",
+        "private_ip_google_access": true,
+        "log_config": [
+          {
+            "aggregation_interval": "INTERVAL_5_SEC",
+            "flow_sampling": 0.5,
+            "metadata": "INCLUDE_ALL_METADATA"
+          }
+        ]
+      }
+    },
+    "router": {
+      "router": {
+        "name": "terraform-${var.environment}-router",
+        "region": "${var.region}",
+        "network": "${google_compute_network.vpc.id}"
+      }
+    },
+    "nat": {
+      "nat": {
+        "name": "terraform-${var.environment}-nat",
+        "router": "${google_compute_router.router.name}",
+        "region": "${var.region}",
+        "nat_ip_allocate_option": "AUTO_ONLY",
+        "source_subnetwork_ip_ranges_to_nat": "LIST_OF_SUBNETWORKS",
+        "subnetwork": [
+          {
+            "name": "${google_compute_subnetwork.private.id}",
+            "source_ip_ranges_to_nat": [
+              "ALL_IP_RANGES"
+            ]
+          }
+        ]
+      }
+    },
+    "storage": {
+      "data": {
+        "name": "terraform-${var.environment}-${var.project_id}-data",
+        "location": "US",
+        "force_destroy": true,
+        "uniform_bucket_level_access": true,
+        "versioning": [
+          {
+            "enabled": true
+          }
+        ],
+        "lifecycle_rule": [
+          {
+            "condition": [
+              {
+                "age": 30
+              }
+            ],
+            "action": [
+              {
+                "type": "Delete"
+              }
+            ]
+          }
+        ],
+        "encryption": [
+          {
+            "default_kms_key_name": "${google_kms_crypto_key.bucket_key.id}"
+          }
+        ],
+        "depends_on": [
+          "${google_kms_crypto_key_iam_member.crypto_key}"
+        ]
+      }
+    },
+    "kms": {
+      "bucket_keyring": {
+        "name": "terraform-${var.environment}-bucket-keyring",
+        "location": "us"
+      }
+    },
+    "kms_key": {
+      "bucket_key": {
+        "name": "terraform-${var.environment}-bucket-key",
+        "key_ring": "${google_kms_key_ring.bucket_keyring.id}"
+      }
+    }
+  },
+  "summary": {
+    "providers": [
+      "google"
+    ],
+    "resource_types": [
+      "google_compute_instance",
+      "google_compute_network",
+      "google_compute_firewall",
+      "google_compute_subnetwork",
+      "google_compute_router",
+      "google_compute_router_nat",
+      "google_storage_bucket",
+      "google_kms_key_ring",
+      "google_kms_crypto_key",
+      "google_kms_crypto_key_iam_member"
+    ],
+    "resource_count": {
+      "google_compute_instance": 3,
+      "google_compute_network": 2,
+      "google_compute_firewall": 3,
+      "google_compute_subnetwork": 2,
+      "google_compute_router": 1,
+      "google_compute_router_nat": 1,
+      "google_storage_bucket": 1,
+      "google_kms_key_ring": 1,
+      "google_kms_crypto_key": 1,
+      "google_kms_crypto_key_iam_member": 1
+    },
+    "network_components": {
+      "instance": [
+        "public",
+        "private",
+        "vm_instance"
+      ],
+      "vpc": [
+        "vpc_network",
+        "vpc"
+      ],
+      "firewall": [
+        "allow_http",
+        "allow_public_web",
+        "allow_internal"
+      ],
+      "subnet": [
+        "public",
+        "private"
+      ],
+      "router": [
+        "router"
+      ],
+      "nat": [
+        "nat"
+      ],
+      "storage": [
+        "data"
+      ],
+      "kms": [
+        "bucket_keyring"
+      ],
+      "kms_key": [
+        "bucket_key"
+      ]
+    },
+    "files_analyzed": [
+      "../gcp/compute.tf",
+      "../gcp/main.tf",
+      "../gcp/network.tf",
+      "../gcp/storage.tf",
+      "../gcp/variables.tf",
+      "../gcp/firewall.tf"
+    ]
+  }
+}
